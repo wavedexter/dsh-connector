@@ -1,0 +1,23 @@
+# ---- Rust / 构建产物 ----
+/src-tauri/target/
+/src-tauri/gen/
+
+# ---- 编译结果 / 安装包 ----
+*.exe
+*.msi
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+
+# ---- 本地运行时文件(含个人服务器信息,永不入库)----
+config.json
+*.log
+
+# ---- 依赖 ----
+node_modules/
+
+# ---- 系统杂项 ----
+.DS_Store
+Thumbs.db
+desktop.ini
