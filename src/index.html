@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>DSH Connector</title>
+<style>
+  :root[data-theme="dark"] {
+    --bg:#0f1420; --panel:#151b2b; --panel2:#0a0e18; --border:#263050; --border2:#1c2440;
+    --text:#e6e9f0; --sub:#9aa4bd; --faint:#6b7590; --btn:#232c44; --btn-text:#c6cde0; --btn-hover:#2e3a5c;
+    --accent:#4a6cf7; --accent-text:#ffffff; --dot-off:#555f7a;
+  }
+  :root[data-theme="light"] {
+    --bg:#eef1f7; --panel:#ffffff; --panel2:#f5f7fb; --border:#d8dfeb; --border2:#e6ebf3;
+    --text:#1a2233; --sub:#5b667e; --faint:#8a94ab; --btn:#e9eef7; --btn-text:#33405c; --btn-hover:#dbe3f1;
+    --accent:#3b5bdb; --accent-text:#ffffff; --dot-off:#b6bfd0;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:14px 16px; font-weight:600; background:var(--panel); display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--dot-off); display:inline-block; flex:none; }
+  .dot.up { background:#35c46a; box-shadow:0 0 8px #35c46a88; }
+  .dot.err { background:#e05252; }
+  .status { font-size:12px; color:var(--sub); font-weight:400; margin-left:auto; }
+  .icon-btn { background:var(--btn); color:var(--btn-text); border:none; border-radius:8px; width:32px; height:32px; font-size:15px; cursor:pointer; flex:none; }
+  .icon-btn:hover { background:var(--btn-hover); }
+  main { padding:16px; display:flex; flex-direction:column; gap:12px; }
+  label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--sub); }
+  input { background:var(--panel2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px 10px; font-size:13px; }
+  input:focus { outline:none; border-color:var(--accent); }
+  .row { display:flex; gap:10px; } .row > label { flex:1; }
+  .sep { font-size:11px; color:var(--faint); border-top:1px solid var(--border); padding-top:12px; margin-top:4px; }
+  textarea#key_info { background:var(--panel2); border:1px solid var(--border); color:var(--sub); border-radius:8px; padding:10px; height:110px; resize:vertical; font:11px/1.6 ui-monospace,Consolas,monospace; white-space:pre-wrap; }
+  textarea#key_info::placeholder { color:var(--faint); white-space:normal; font-family:system-ui,"Microsoft YaHei",sans-serif; }
+  button { border:none; border-radius:8px; padding:9px 12px; font-weight:600; cursor:pointer; background:var(--accent); color:var(--accent-text); font-size:13px; }
+  button.ghost { background:var(--btn); color:var(--btn-text); }
+  button:hover { filter:brightness(1.08); }
+  .hint { font-size:11px; color:var(--faint); line-height:1.6; }
+  pre#log { background:var(--panel2); border:1px solid var(--border2); border-radius:8px; padding:10px; height:170px; overflow:auto; font:11px/1.6 ui-monospace,Consolas,monospace; white-space:pre-wrap; margin:0; color:var(--sub); }
+</style>
+</head>
+<body>
+<header>
+  <span id="dot" class="dot"></span> DSH Connector
+  <button id="btn-theme" class="icon-btn" title="切换深浅色">☀</button>
+  <span class="status" id="status">未连接</span>
+</header>
+<main>
+  <label>主机地址(IPv6 或域名)<input id="host" placeholder="2001:db8::1 或 example.com"></label>
+  <div class="row">
+    <label>SSH 端口<input id="ssh_port" value="22"></label>
+    <label>用户名<input id="user" value="" placeholder="ssh 用户名"></label>
+  </div>
+  <label>私钥文件路径(在这台电脑上)<input id="key_path" placeholder="C:\Users\你的用户名\.ssh\id_ed25519"></label>
+  <div class="row">
+    <label>本地端口(固定勿改)<input id="local_port" value="18080"></label>
+    <label>远程端口<input id="remote_port" value="3080"></label>
+  </div>
+  <label>服务器 dsh 日志路径<input id="dsh_log_path" value="" placeholder="/path/to/dsh/dsh.log"></label>
+  <div class="row">
+    <button id="btn-save" class="ghost">保存配置</button>
+    <button id="btn-connect">连接</button>
+    <button id="btn-disconnect" class="ghost">断开</button>
+  </div>
+  <div class="row">
+    <button id="btn-reauth" class="ghost">重新获取凭据</button>
+    <button id="btn-test" class="ghost">测试连接</button>
+    <button id="btn-copy" class="ghost">复制日志</button>
+  </div>
+
+  <div class="sep">密钥管理(不会配 SSH 密钥?用这个)</div>
+  <label>私钥保存路径(任意名字均可)<input id="key_gen_path" placeholder="任意路径,如 C:\Users\你\.ssh\my_key"></label>
+  <div class="row">
+    <button id="btn-genkey" class="ghost">① 生成密钥对</button>
+    <button id="btn-fixperm" class="ghost">② 修复私钥权限</button>
+    <button id="btn-showcmd" class="ghost">③ 看部署命令</button>
+  </div>
+  <textarea id="key_info" readonly placeholder="点"① 生成密钥对":自动生成密钥、修好权限,并给出把公钥装上服务器的一条命令(只需在服务器上执行一次,会问一次你的服务器密码)。"></textarea>
+  <div class="hint">连接成功后本窗口直接变成 DSH WebUI。<b>关闭本窗口不会退出</b>——App 退到系统托盘继续跑(左键点托盘图标=显示/隐藏,右键=菜单)。日常操作都在托盘右键菜单里。</div>
+  <pre id="log"></pre>
+</main>
+<script>
+const INVOKE = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
+const $ = id => document.getElementById(id);
+function logLine(s) { const el = $('log'); el.textContent += s + '\n'; el.scrollTop = el.scrollHeight; }
+if (!INVOKE) { logLine('错误: Tauri 运行时未注入'); }
+const call = (cmd, args) => INVOKE(cmd, args || {});
+
+// ---- 主题 ----
+let currentTheme = 'dark';
+async function applyTheme() {
+  try { currentTheme = await call('get_theme'); } catch (e) { return; }
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  $('btn-theme').textContent = currentTheme === 'dark' ? '☀' : '🌙';
+  $('btn-theme').title = currentTheme === 'dark' ? '切换到浅色' : '切换到深色';
+}
+$('btn-theme').onclick = async () => {
+  await call('set_theme', { theme: currentTheme === 'dark' ? 'light' : 'dark' });
+  await applyTheme();
+};
+setInterval(async () => {
+  try {
+    const t = await call('get_theme');
+    if (t !== currentTheme) await applyTheme();
+  } catch (e) {}
+}, 1000);
+applyTheme();
+
+// ---- 配置 ----
+async function loadCfg() {
+  try {
+    const c = await call('get_config');
+    currentTheme = c.theme || 'dark';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    $('btn-theme').textContent = currentTheme === 'dark' ? '☀' : '🌙';
+    $('host').value = c.host || '';
+    $('ssh_port').value = c.ssh_port;
+    $('user').value = c.user;
+    $('key_path').value = c.key_path || '';
+    $('local_port').value = c.local_port;
+    $('remote_port').value = c.remote_port;
+    $('dsh_log_path').value = c.dsh_log_path;
+  } catch (e) { logLine('读取配置失败: ' + e); }
+}
+function saveCfg() {
+  const cfg = {
+    host: $('host').value.trim(),
+    ssh_port: +$('ssh_port').value || 22,
+    user: $('user').value.trim(),
+    key_path: $('key_path').value.trim(),
+    local_port: +$('local_port').value || 18080,
+    remote_port: +$('remote_port').value || 3080,
+    dsh_log_path: $('dsh_log_path').value.trim(),
+    auto_connect: true,
+    theme: currentTheme,
+  };
+  call('save_config', { cfg }).then(() => logLine('配置已保存'), e => logLine('保存失败: ' + e));
+}
+$('btn-save').onclick = saveCfg;
+$('btn-connect').onclick = () => call('connect').catch(e => logLine('连接失败: ' + e));
+$('btn-disconnect').onclick = () => call('disconnect').catch(e => logLine('断开失败: ' + e));
+$('btn-reauth').onclick = () => call('reauth').catch(e => logLine('操作失败: ' + e));
+$('btn-test').onclick = () => call('test_key').then(() => logLine('诊断已启动,约 15 秒后看日志…'), e => logLine('诊断失败: ' + e));
+$('btn-copy').onclick = async () => {
+  try {
+    const lines = await call('get_logs');
+    const text = lines.join('\n');
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    if (!ok && navigator.clipboard) { try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {} }
+    ta.remove();
+    logLine(ok ? '日志已复制到剪贴板,直接粘贴给我即可' : '复制失败,请手动全选日志区复制');
+  } catch (e) { logLine('读取日志失败: ' + e); }
+};
+
+// ---- 密钥管理 ----
+(async () => {
+  try {
+    const p = await call('default_key_path');
+    if (p) $('key_gen_path').value = p;
+  } catch (e) {}
+})();
+
+function showKeyInfo(text) {
+  $('key_info').value = text;
+  logLine(text.split('\n')[0]);
+}
+
+$('btn-genkey').onclick = async () => {
+  const path = $('key_gen_path').value.trim();
+  if (!path) { logLine('请先填写私钥保存路径'); return; }
+  $('btn-genkey').disabled = true;
+  $('btn-genkey').textContent = '生成中…';
+  try {
+    const pubkey = await call('gen_keypair', { path });
+    const host = $('host').value.trim() || '<服务器地址>';
+    const user = $('user').value.trim() || '<用户名>';
+    const cmd = `ssh ${user}@${host} "mkdir -p ~/.ssh && echo '${pubkey}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"`;
+    showKeyInfo(
+      '✅ 密钥已生成,权限已修好。\n\n'
+      + '把下面这一行粘到任意终端执行一次(会问你服务器密码,正常的),公钥就装好了:\n\n'
+      + cmd
+      + '\n\n之后"私钥文件路径"已帮你填好,点"保存配置"→"连接"即可。');
+    $('key_path').value = path;
+  } catch (e) {
+    showKeyInfo('❌ 生成失败: ' + e);
+  } finally {
+    $('btn-genkey').disabled = false;
+    $('btn-genkey').textContent = '① 生成密钥对';
+  }
+};
+
+$('btn-fixperm').onclick = async () => {
+  const path = $('key_gen_path').value.trim() || $('key_path').value.trim();
+  if (!path) { logLine('请先填写私钥路径'); return; }
+  try {
+    await call('fix_key_permissions', { path });
+    showKeyInfo('✅ 私钥权限已收紧(仅当前用户可读),Windows OpenSSH 不会再拒用它。');
+  } catch (e) {
+    showKeyInfo('❌ 权限修复失败: ' + e + '\n\n手动方法(PowerShell):\n'
+      + 'icacls "' + path + '" /inheritance:r\n'
+      + 'icacls "' + path + '" /grant:r "$env:USERNAME:R"');
+  }
+};
+
+$('btn-showcmd').onclick = async () => {
+  const path = $('key_gen_path').value.trim() || $('key_path').value.trim();
+  if (!path) { logLine('请先填写私钥路径'); return; }
+  const host = $('host').value.trim() || '<服务器地址>';
+  const user = $('user').value.trim() || '<用户名>';
+  showKeyInfo(
+    '手动部署三步(把公钥装上服务器,只需一次):\n\n'
+    + '1) 本机 PowerShell 执行,看得见一长串 ssh-ed25519 开头的内容(这就是公钥):\n'
+    + '   type "' + path + '.pub"\n\n'
+    + '2) 在能登服务器的任意终端执行(把第 1 步那串粘到单引号里):\n'
+    + '   ssh ' + user + '@' + host + ' "mkdir -p ~/.ssh && echo \'粘贴公钥内容\' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"\n\n'
+    + '3) 回本 App:私钥路径填 ' + path + ' → 保存配置 → 连接。');
+};
+
+setInterval(async () => {
+  try {
+    const s = await call('get_status');
+    $('dot').className = 'dot' + (s.tunnel_up && s.webui_ok ? ' up' : (s.last_error ? ' err' : ''));
+    $('status').textContent =
+      (s.tunnel_up ? '隧道已连接' : '隧道未连接') + (s.webui_ok ? ' · WebUI 就绪' : ' · 等待凭据');
+  } catch (e) { /* 启动瞬间可能未就绪 */ }
+  try {
+    const lines = await call('get_logs');
+    $('log').textContent = lines.join('\n');
+    $('log').scrollTop = $('log').scrollHeight;
+  } catch (e) { /* ignore */ }
+}, 1000);
+
+loadCfg();
+</script>
+</body>
+</html>

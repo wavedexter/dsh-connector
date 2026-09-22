@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>DSH Connector · 下载</title>
+<style>
+  :root[data-theme="dark"] {
+    --bg:#0f1420; --panel:#151b2b; --panel2:#0a0e18; --border:#263050; --border2:#1c2440;
+    --text:#e6e9f0; --sub:#9aa4bd; --faint:#6b7590; --btn:#232c44; --btn-text:#c6cde0;
+    --accent:#4a6cf7; --accent-text:#ffffff;
+    --doing-bg:#1e3a5f; --doing-text:#7db3f0;
+    --done-bg:#12351f; --done-text:#5ed68a;
+    --fail-bg:#3d1a1a; --fail-text:#f08a8a;
+    --cancel-bg:#33384a; --cancel-text:#a0a8bd;
+  }
+  :root[data-theme="light"] {
+    --bg:#eef1f7; --panel:#ffffff; --panel2:#f5f7fb; --border:#d8dfeb; --border2:#e6ebf3;
+    --text:#1a2233; --sub:#5b667e; --faint:#8a94ab; --btn:#e9eef7; --btn-text:#33405c;
+    --accent:#3b5bdb; --accent-text:#ffffff;
+    --doing-bg:#e3ecfb; --doing-text:#2b5cb8;
+    --done-bg:#e3f5ea; --done-text:#157347;
+    --fail-bg:#fbe6e6; --fail-text:#b02a2a;
+    --cancel-bg:#e8eaf0; --cancel-text:#5b667e;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:13px/1.5 system-ui,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); display:flex; flex-direction:column; height:100vh; }
+  header { padding:12px 16px; font-weight:600; background:var(--panel); display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); }
+  header .hint { font-weight:400; font-size:11px; color:var(--faint); margin-left:auto; }
+  .icon-btn { background:var(--btn); color:var(--btn-text); border:none; border-radius:8px; width:30px; height:30px; font-size:14px; cursor:pointer; flex:none; }
+  .icon-btn:hover { filter:brightness(1.1); }
+  .ops { padding:12px 16px 4px; display:flex; gap:10px; }
+  button { border:none; border-radius:8px; padding:8px 14px; font-weight:600; cursor:pointer; background:var(--accent); color:var(--accent-text); font-size:13px; }
+  button.ghost { background:var(--btn); color:var(--btn-text); }
+  button:hover { filter:brightness(1.08); }
+  #list { flex:1; overflow:auto; padding:8px 16px 16px; display:flex; flex-direction:column; gap:10px; }
+  .empty { color:var(--faint); text-align:center; padding:40px 0; font-size:12px; }
+  .item { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .item .row1 { display:flex; align-items:center; gap:10px; }
+  .item .name { font-weight:600; font-size:13px; word-break:break-all; flex:1; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:99px; flex:none; }
+  .badge.doing { background:var(--doing-bg); color:var(--doing-text); }
+  .badge.done { background:var(--done-bg); color:var(--done-text); }
+  .badge.fail { background:var(--fail-bg); color:var(--fail-text); }
+  .badge.cancel { background:var(--cancel-bg); color:var(--cancel-text); }
+  .bar { height:6px; background:var(--panel2); border:1px solid var(--border2); border-radius:99px; margin-top:8px; overflow:hidden; }
+  .bar > div { height:100%; background:var(--accent); border-radius:99px; transition:width .25s; }
+  .bar.indeterminate > div { width:100% !important; animation:pulse 1.4s infinite ease-in-out; }
+  @keyframes pulse { 0%,100% { opacity:.3 } 50% { opacity:.9 } }
+  .row2 { display:flex; align-items:center; gap:10px; margin-top:6px; font-size:11px; color:var(--sub); }
+  .row2 .path { flex:1; word-break:break-all; }
+  .mini { background:var(--btn); color:var(--btn-text); border:none; border-radius:6px; padding:3px 9px; font-size:11px; cursor:pointer; }
+  .mini:hover { filter:brightness(1.1); }
+  .err { color:var(--fail-text); font-size:11px; margin-top:4px; word-break:break-all; }
+</style>
+</head>
+<body>
+<header>
+  下载
+  <button id="btn-theme" class="icon-btn" title="切换深浅色">☀</button>
+  <span class="hint">App 接管的下载 → 自动存到"下载"目录,带进度/速度/可取消</span>
+</header>
+<div class="ops">
+  <button id="btn-open" class="ghost">打开下载文件夹</button>
+  <button id="btn-refresh" class="ghost">刷新</button>
+  <button id="btn-close" class="ghost">关闭</button>
+</div>
+<div id="list"><div class="empty">加载中…</div></div>
+<script>
+const INVOKE = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
+const $ = id => document.getElementById(id);
+const call = (cmd, args) => INVOKE(cmd, args || {});
+if (!INVOKE) { $('list').innerHTML = '<div class="empty">错误: Tauri 运行时未注入</div>'; }
+
+// ---- 主题 ----
+let currentTheme = 'dark';
+async function applyTheme() {
+  try { currentTheme = await call('get_theme'); } catch (e) { return; }
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  $('btn-theme').textContent = currentTheme === 'dark' ? '☀' : '🌙';
+}
+$('btn-theme').onclick = async () => {
+  await call('set_theme', { theme: currentTheme === 'dark' ? 'light' : 'dark' });
+  await applyTheme();
+};
+setInterval(async () => {
+  try {
+    const t = await call('get_theme');
+    if (t !== currentTheme) await applyTheme();
+  } catch (e) {}
+}, 1000);
+applyTheme();
+
+const fmtBytes = b => {
+  if (b == null) return '?';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+  return b.toFixed(i ? 1 : 0) + ' ' + u[i];
+};
+const fmtSpeed = s => s > 0.5 ? fmtBytes(s) + '/s' : '';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+
+function badgeClass(st) {
+  if (st === '下载中' || st === '传输中') return 'doing';
+  if (st === '已完成') return 'done';
+  if (st === '已取消') return 'cancel';
+  return 'fail';
+}
+
+async function refresh() {
+  let list = [];
+  try { list = await call('get_downloads'); } catch (e) { $('list').innerHTML = '<div class="empty">读取失败: ' + esc(e) + '</div>'; return; }
+  if (!list.length) { $('list').innerHTML = '<div class="empty">暂无下载任务</div>'; return; }
+  const box = $('list');
+  box.innerHTML = '';
+  for (const d of list) {
+    const el = document.createElement('div');
+    el.className = 'item';
+    const active = d.status === '下载中';
+    const pct = (d.total && d.total > 0) ? Math.min(100, d.done / d.total * 100) : null;
+    const sizeText = d.total
+      ? fmtBytes(d.done) + ' / ' + fmtBytes(d.total)
+      : (active ? '大小未知 · 已下载 ' + fmtBytes(d.done) : fmtBytes(d.done));
+    el.innerHTML =
+      '<div class="row1"><span class="name">' + esc(d.file_name) + '</span>'
+      + '<span class="badge ' + badgeClass(d.status) + '">' + esc(d.status) + '</span>'
+      + (active ? '<button class="mini" data-cancel="' + d.id + '">取消</button>' : '')
+      + '</div>'
+      + '<div class="bar' + (active && pct === null ? ' indeterminate' : '') + '"><div style="width:'
+        + (pct === null ? 100 : pct.toFixed(1)) + '%"></div></div>'
+      + '<div class="row2"><span>' + (active ? fmtSpeed(d.speed) : '') + '</span>'
+      + '<span>' + sizeText + '</span>'
+      + '<span class="path">' + esc(d.dest) + '</span></div>'
+      + (d.error ? '<div class="err">' + esc(d.error) + '</div>' : '');
+    box.appendChild(el);
+  }
+  box.querySelectorAll('[data-cancel]').forEach(b => {
+    b.onclick = async () => { await call('cancel_download', { id: +b.dataset.cancel }); refresh(); };
+  });
+}
+
+$('btn-refresh').onclick = refresh;
+$('btn-close').onclick = () => window.close();
+$('btn-open').onclick = () => call('open_downloads_dir').catch(e => alert('打开失败: ' + e));
+setInterval(refresh, 250);
+refresh();
+</script>
+</body>
+</html>

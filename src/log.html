@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>DSH Connector · 运行日志</title>
+<style>
+  :root[data-theme="dark"] {
+    --bg:#0f1420; --panel:#151b2b; --panel2:#0a0e18; --border:#263050; --border2:#1c2440;
+    --text:#e6e9f0; --sub:#9aa4bd; --faint:#6b7590; --btn:#232c44; --btn-text:#c6cde0;
+    --accent:#4a6cf7; --accent-text:#ffffff;
+  }
+  :root[data-theme="light"] {
+    --bg:#eef1f7; --panel:#ffffff; --panel2:#f5f7fb; --border:#d8dfeb; --border2:#e6ebf3;
+    --text:#1a2233; --sub:#5b667e; --faint:#8a94ab; --btn:#e9eef7; --btn-text:#33405c;
+    --accent:#3b5bdb; --accent-text:#ffffff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:13px/1.5 system-ui,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); display:flex; flex-direction:column; height:100vh; }
+  header { padding:12px 16px; font-weight:600; background:var(--panel); display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); }
+  header .hint { font-weight:400; font-size:11px; color:var(--faint); margin-left:auto; }
+  .icon-btn { background:var(--btn); color:var(--btn-text); border:none; border-radius:8px; width:30px; height:30px; font-size:14px; cursor:pointer; flex:none; }
+  .icon-btn:hover { filter:brightness(1.1); }
+  .ops { padding:12px 16px; display:flex; gap:10px; }
+  button { border:none; border-radius:8px; padding:8px 14px; font-weight:600; cursor:pointer; background:var(--accent); color:var(--accent-text); font-size:13px; }
+  button.ghost { background:var(--btn); color:var(--btn-text); }
+  button:hover { filter:brightness(1.08); }
+  pre { flex:1; margin:0 16px 16px; background:var(--panel2); border:1px solid var(--border2); border-radius:8px; padding:10px; overflow:auto; font:11px/1.6 ui-monospace,Consolas,monospace; white-space:pre-wrap; color:var(--sub); }
+</style>
+</head>
+<body>
+<header>
+  DSH Connector · 运行日志
+  <button id="btn-theme" class="icon-btn" title="切换深浅色">☀</button>
+  <span class="hint">每秒自动刷新 · 日志同时落盘在 AppData 目录</span>
+</header>
+<div class="ops">
+  <button id="btn-copy">复制日志</button>
+  <button id="btn-refresh" class="ghost">刷新</button>
+  <button id="btn-close" class="ghost">关闭</button>
+</div>
+<pre id="log">加载中…</pre>
+<script>
+const INVOKE = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
+const $ = id => document.getElementById(id);
+const call = (cmd, args) => INVOKE(cmd, args || {});
+if (!INVOKE) { $('log').textContent = '错误: Tauri 运行时未注入'; }
+
+// ---- 主题 ----
+let currentTheme = 'dark';
+async function applyTheme() {
+  try { currentTheme = await call('get_theme'); } catch (e) { return; }
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  $('btn-theme').textContent = currentTheme === 'dark' ? '☀' : '🌙';
+}
+$('btn-theme').onclick = async () => {
+  await call('set_theme', { theme: currentTheme === 'dark' ? 'light' : 'dark' });
+  await applyTheme();
+};
+setInterval(async () => {
+  try {
+    const t = await call('get_theme');
+    if (t !== currentTheme) await applyTheme();
+  } catch (e) {}
+}, 1000);
+applyTheme();
+
+async function refresh() {
+  try {
+    const lines = await call('get_logs');
+    const atBottom = $('log').scrollTop + $('log').clientHeight >= $('log').scrollHeight - 30;
+    $('log').textContent = lines.join('\n');
+    if (atBottom) $('log').scrollTop = $('log').scrollHeight;
+  } catch (e) { $('log').textContent = '读取失败: ' + e; }
+}
+$('btn-refresh').onclick = refresh;
+$('btn-close').onclick = () => window.close();
+$('btn-copy').onclick = async () => {
+  const text = $('log').textContent;
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  if (!ok && navigator.clipboard) { try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {} }
+  ta.remove();
+  const b = $('btn-copy');
+  b.textContent = ok ? '已复制 ✓' : '复制失败';
+  setTimeout(() => { b.textContent = '复制日志'; }, 1500);
+};
+setInterval(refresh, 1000);
+refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# dsh-connector 自己的命令权限(Tauri v2 ACL)
+# 文件名/标识符可自定义,这里用一个集合权限,capability 里引用 "allow-connector" 即可。
+
+[[permission]]
+identifier = "allow-connector"
+description = "允许 dsh-connector 的全部命令(配置/连接/断开/诊断/日志/下载)"
+commands.allow = [
+  "get_config",
+  "save_config",
+  "connect",
+  "disconnect",
+  "reauth",
+  "test_key",
+  "get_status",
+  "get_logs",
+  "get_downloads",
+  "cancel_download",
+  "open_downloads_dir",
+  "get_theme",
+  "set_theme",
+  "default_key_path",
+  "fix_key_permissions",
+  "gen_keypair"
+]

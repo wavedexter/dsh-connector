@@ -1,0 +1,15 @@
+{
+  "identifier": "default",
+  "description": "dsh-connector 默认能力:允许主窗口/日志窗/配置窗/下载窗与本地 WebUI(远程 URL)之间走 IPC",
+  "windows": ["main", "log", "config", "download"],
+  "permissions": [
+    "core:default",
+    "allow-connector"
+  ],
+  "remote": {
+    "urls": [
+      "http://127.0.0.1:18080/**",
+      "http://localhost:18080/**"
+    ]
+  }
+}
