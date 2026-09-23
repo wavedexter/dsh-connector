@@ -8,7 +8,7 @@
 *.dmg
 *.deb
 *.rpm
-*.AppImage
+*..AppImage
 
 # ---- 本地运行时文件(含个人服务器信息,永不入库)----
 config.json
@@ -21,3 +21,12 @@ node_modules/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# 发布底稿(一次性工作文件,永不入库)
+/release-notes-*.md
+
+# 分发包/压缩包(一次性产物,永不入库——曾误提交导致 zip 包住自己)
+*.zip
+*.7z
+*.rar
+*.tar.gz
