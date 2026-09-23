@@ -8,7 +8,7 @@
 *.dmg
 *.deb
 *.rpm
-*..AppImage
+*.AppImage
 
 # ---- 本地运行时文件(含个人服务器信息,永不入库)----
 config.json
