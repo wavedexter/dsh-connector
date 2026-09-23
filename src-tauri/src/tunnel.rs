@@ -70,16 +70,59 @@ pub fn ssh_exec_command(cfg: &Config, remote_cmd: &str, verbose: bool) -> Comman
     cmd
 }
 
-/// SSH 上去 grep 日志,拿当前有效的 token。
-pub fn fetch_token(cfg: &Config) -> Result<String> {
-    let remote_cmd = format!(
-        "grep -oE 'http://127\\.0\\.0\\.1:{}/\\?token=[^ ]+' {} | tail -1",
-        cfg.remote_port, cfg.dsh_log_path
-    );
-    let out = ssh_exec_command(cfg, &remote_cmd, false).output()?;
+/// 跑一条命令并等待,带**硬超时**;超时杀进程并报错。
+/// 教训:ssh 在对方网络异常时可能无限期卡住,曾把认证循环整个堵死、
+/// 导致窗口永远停在配置页。任何 ssh 调用都必须有截止时间。
+pub(crate) fn run_with_deadline(
+    mut cmd: Command,
+    deadline: Duration,
+) -> Result<std::process::Output> {
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let start = std::time::Instant::now();
+    loop {
+        if child.try_wait()?.is_some() {
+            return child.wait_with_output().map_err(anyhow::Error::from);
+        }
+        if start.elapsed() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            anyhow::bail!(
+                "ssh 超过 {} 秒未返回,已强制终止(网络异常或 ssh 卡死)",
+                deadline.as_secs()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// SSH 上去 grep 日志,拿当前有效的 token(日志里最后一条)。
+///
+/// 注意:远程命令**刻意不用引号、正则、管道**——只用最朴素的
+/// `grep token= <文件>`。教训:带单引号/反斜杠的复杂命令在
+/// Windows ssh.exe 的参数传递中会被损坏,bash 收到引号不闭合的
+/// 半截命令会永远等更多输入,ssh 会话挂死(家里实测复现,
+/// echo 简单命令却正常)。历史多行由 Rust 侧取最后一条。
+pub fn fetch_token(state: &Arc<AppState>, cfg: &Config) -> Result<String> {
+    // 铁律:日志路径空了就明明白白报错,绝不能让 grep 退化成读 stdin 死等
+    // (曾因该栏被空值覆盖,ssh 会话全部挂死 20 秒被杀)
+    if cfg.dsh_log_path.trim().is_empty() {
+        anyhow::bail!(
+            "服务器 dsh 日志路径未配置——请在配置页填写(如 /home/fn/dsh/dsh.log)"
+        );
+    }
+    let remote_cmd = format!("grep token= {} < /dev/null", cfg.dsh_log_path);
+    state.log(format!("auth: ssh 远程命令: {remote_cmd}"));
+    let out = run_with_deadline(
+        ssh_exec_command(cfg, &remote_cmd, false),
+        Duration::from_secs(20),
+    )?;
     if !out.status.success() {
         return Err(anyhow!(
-            "ssh 执行失败: {}",
+            "ssh 执行失败(退出码 {:?}): {}",
+            out.status.code(),
             String::from_utf8_lossy(&out.stderr).trim()
         ));
     }
@@ -87,6 +130,7 @@ pub fn fetch_token(cfg: &Config) -> Result<String> {
     let line = stdout
         .lines()
         .map(str::trim)
+        .rev()
         .find(|l| l.contains("token="))
         .ok_or_else(|| anyhow!("在 {} 中没有找到 token", cfg.dsh_log_path))?;
     let token = line
@@ -107,9 +151,9 @@ pub fn run_key_test(state: &Arc<AppState>) {
             state.log("=== 诊断中止: 主机地址/用户名/私钥路径为空 ===");
             return;
         }
-        state.log("=== 密钥测试开始(最长约 15 秒) ===");
-        let mut cmd = ssh_exec_command(&cfg, "echo 密钥连接OK", true);
-        match cmd.output() {
+        state.log("=== 密钥测试开始(最长约 30 秒) ===");
+        let cmd = ssh_exec_command(&cfg, "echo 密钥连接OK", true);
+        match run_with_deadline(cmd, Duration::from_secs(30)) {
             Ok(out) => {
                 let se = String::from_utf8_lossy(&out.stderr);
                 for line in se.lines() {
@@ -271,9 +315,15 @@ pub fn start_auth_loop(state: Arc<AppState>) {
 /// 取新 token → 本地换 cookie → 把主窗口导航到 WebUI(单窗口,不再弹新窗)。
 fn refresh(state: &Arc<AppState>, cfg: &Config) -> Result<()> {
     state.log("auth: 正在通过 SSH 获取当前 token …");
-    let token = fetch_token(cfg)?;
+    let started = std::time::Instant::now();
+    let token = fetch_token(state, cfg)?;
     let last4: String = token.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
-    state.log(format!("auth: token 已获取({}…{}),正在换 cookie …", probe::truncate(&token, 4), last4));
+    state.log(format!(
+        "auth: token 已获取({}…{}),SSH 耗时 {:.1}s,正在换 cookie …",
+        probe::truncate(&token, 4),
+        last4,
+        started.elapsed().as_secs_f32()
+    ));
     let resp = probe::http_get(
         "127.0.0.1",
         cfg.local_port,

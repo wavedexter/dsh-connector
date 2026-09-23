@@ -209,3 +209,23 @@ cargo xwin build --release --target x86_64-pc-windows-msvc
 - dsh 认证源码:`@deepseek-ai/dsh-client-connection`(MIT)
 - Tauri v2 文档:tray / ACL(capabilities、permissions、remote urls)/ DownloadEvent
 - WebView2:SameSite 行为、DownloadStarting、CREATE_NO_WINDOW
+
+### 4.9 血的教训:SSH 卡死三连 + 托盘线程(家里网络实测复现)
+
+**事故**:某次在家(办公室→原本畅通的 IPv6 不通、改走局域网)启动,窗口永远停在配置页;表象是"测试连接正常,但连不上"。
+
+**定位链**(每一步都由日志推进):
+
+1. echo 测试从同一台电脑连同一地址**每次都秒过** → 排除网络/钥匙/IP 版本;
+2. 同一条 grep 命令在服务器上 0.26s 返回 → 排除命令本身与日志大小;
+3. 超时日志"卡满 20s 被杀、会话一直活着" → 远程在**等一个永远不闭合的东西**;
+4. 自报命令行日志 `auth: ssh 远程命令: grep token= `(路径为空!)→ 真凶:表单某栏忘填,保存时**空值把已存配置覆盖**了,`grep` 无文件参数退化成**读 stdin 死等**。
+
+**沉淀的铁律**(均已落入代码):
+
+- 任何等待外部(ssh/网络)的调用**必须带硬超时**,超时强杀 + 重试——单线程循环里一个无限期阻塞就能堵死整个功能;
+- 远端命令**零引号、零正则、零管道**,stdin 一律 `< /dev/null`;
+- **Windows ssh.exe 对带引号/反斜杠的远程命令传递会损坏**(同一命令在服务器上直接跑没问题);
+- 表单保存采用**合并语义:空值永不清除已存配置**;
+- 关键操作前**自报命令行 + 记耗时**,排障不靠猜;
+- Windows 上**托盘图标事件跑在托盘自己的线程**,对主窗口的 show/hide/set_focus 必须 `run_on_main_thread` 投递,否则闪退。

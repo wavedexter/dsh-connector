@@ -21,7 +21,7 @@
   .dot.up { background:#35c46a; box-shadow:0 0 8px #35c46a88; }
   .dot.err { background:#e05252; }
   .status { font-size:12px; color:var(--sub); font-weight:400; margin-left:auto; }
-  .icon-btn { background:var(--btn); color:var(--btn-text); border:none; border-radius:8px; width:32px; height:32px; font-size:15px; cursor:pointer; flex:none; }
+  .icon-btn { background:var(--btn); color:var(--btn-text); border:none; border-radius:8px; width:32px; height:32px; font-size:15px; cursor:pointer; flex:none; display:inline-flex; align-items:center; justify-content:center; padding:0; line-height:1; }
   .icon-btn:hover { background:var(--btn-hover); }
   main { padding:16px; display:flex; flex-direction:column; gap:12px; }
   label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--sub); }
@@ -55,7 +55,7 @@
     <label>本地端口(固定勿改)<input id="local_port" value="18080"></label>
     <label>远程端口<input id="remote_port" value="3080"></label>
   </div>
-  <label>服务器 dsh 日志路径<input id="dsh_log_path" value="" placeholder="/path/to/dsh/dsh.log"></label>
+  <label>服务器 dsh 日志路径(必填)<input id="dsh_log_path" value="" placeholder="/path/to/dsh/dsh.log"></label>
   <div class="row">
     <button id="btn-save" class="ghost">保存配置</button>
     <button id="btn-connect">连接</button>

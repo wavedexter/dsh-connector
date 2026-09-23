@@ -258,7 +258,11 @@ pub fn run() -> tauri::Result<()> {
                 .on_menu_event(|app, event| {
                     let state = app.try_state::<Arc<AppState>>().map(|s| s.inner().clone());
                     match event.id().as_ref() {
-                        "show" => toggle_main_window(app),
+                        "show" => {
+                            let app_for_thread = app.clone();
+                            let _ =
+                                app.run_on_main_thread(move || toggle_main_window(&app_for_thread));
+                        }
                         "reauth" => {
                             if let Some(s) = &state {
                                 s.force_reauth.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -306,12 +310,17 @@ pub fn run() -> tauri::Result<()> {
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
+                    // 注意:托盘图标事件跑在托盘自己的线程上,那里直接 show/hide
+                    // 主窗口是跨线程 UI 操作,Windows 上会闪退(实测)。
+                    // 所以这里只投递到主线程执行。
                     if let tauri::tray::TrayIconEvent::Click {
                         button: tauri::tray::MouseButton::Left,
                         ..
                     } = event
                     {
-                        toggle_main_window(tray.app_handle());
+                        let app = tray.app_handle().clone();
+                        let app_for_thread = app.clone();
+                        let _ = app.run_on_main_thread(move || toggle_main_window(&app_for_thread));
                     }
                 })
                 .build(handle)?;

@@ -135,9 +135,11 @@ fn remote_file_size(state: &Arc<AppState>, url: &tauri::Url) -> Option<u64> {
     // 单引号安全转义,防路径里有特殊字符
     let escaped = path.replace('\'', "'\\''");
     let cmd = format!("stat -c%s '{escaped}' 2>/dev/null || wc -c < '{escaped}'");
-    let out = crate::tunnel::ssh_exec_command(&cfg, &cmd, false)
-        .output()
-        .ok()?;
+    let out = crate::tunnel::run_with_deadline(
+        crate::tunnel::ssh_exec_command(&cfg, &cmd, false),
+        Duration::from_secs(15),
+    )
+    .ok()?;
     if !out.status.success() {
         return None;
     }

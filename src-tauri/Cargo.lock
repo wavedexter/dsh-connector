@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "dsh-connector"
-version = "1.0.7"
+version = "1.0.11"
 dependencies = [
  "anyhow",
  "serde",

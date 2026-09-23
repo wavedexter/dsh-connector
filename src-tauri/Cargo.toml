@@ -1,6 +1,6 @@
 [package]
 name = "dsh-connector"
-version = "1.0.7"
+version = "1.0.11"
 description = "DSH 远程连接器"
 edition = "2021"
 

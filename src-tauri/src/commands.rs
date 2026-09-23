@@ -14,11 +14,24 @@ pub fn save_config(
     state: State<'_, std::sync::Arc<AppState>>,
     cfg: Config,
 ) -> Result<(), String> {
-    *state.cfg.lock().unwrap() = cfg.clone();
+    // 合并规则:文本栏位为空时保留旧值。
+    // 教训:表单某栏忘了填就保存,曾把"日志路径"清空,导致 grep 无文件参数
+    // 退化成读 stdin 死等,ssh 会话全部挂死(实测复现)。空值永不清除已存配置。
+    let merged = {
+        let old = state.cfg.lock().unwrap();
+        Config {
+            host: pick(&cfg.host, &old.host),
+            user: pick(&cfg.user, &old.user),
+            key_path: pick(&cfg.key_path, &old.key_path),
+            dsh_log_path: pick(&cfg.dsh_log_path, &old.dsh_log_path),
+            ..cfg
+        }
+    };
+    *state.cfg.lock().unwrap() = merged.clone();
     if let Some(handle) = state.handle.get() {
         if let Ok(dir) = handle.path().app_config_dir() {
             let _ = std::fs::create_dir_all(&dir);
-            if let Ok(json) = serde_json::to_string_pretty(&cfg) {
+            if let Ok(json) = serde_json::to_string_pretty(&merged) {
                 let _ = std::fs::write(dir.join("config.json"), json);
                 state.log(format!(
                     "config: 已保存到 {}",
@@ -28,6 +41,14 @@ pub fn save_config(
         }
     }
     Ok(())
+}
+
+fn pick(new: &str, old: &str) -> String {
+    if new.trim().is_empty() && !old.trim().is_empty() {
+        old.to_string()
+    } else {
+        new.to_string()
+    }
 }
 
 #[tauri::command]
